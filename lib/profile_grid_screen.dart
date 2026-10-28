@@ -1,8 +1,14 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'glass_background.dart';
+
+part 'remove_login_flow.dart';
 
 const _brand = Color(0xFF0054A6);
 
@@ -94,25 +100,75 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     duration: const Duration(milliseconds: 650),
   );
 
-  // 0 = two users, 1 = three users.
+  // 0 = two users, 1 = three users (drives the prototype switch thumb).
   late final AnimationController _users = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 450),
   );
+  bool _threeUsers = false;
 
-  // Built once: the screen rebuilds every frame while the version crossfades.
+  // Per-profile presence (1 = shown); profiles grow in / out of the row.
+  late final List<AnimationController> _shown = [
+    for (var i = 0; i < _savedProfiles.length; i++)
+      AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 420),
+        value: i < 2 ? 1 : 0,
+      ),
+  ];
+  final Set<int> _removed = {};
+
+  // Manage mode («Хэрэглэгч удирдах»): badges + a gentle jiggle.
+  bool _managing = false;
+  late final AnimationController _manage = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+  );
+  late final AnimationController _jiggle = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+
+  // «… хасагдлаа · Буцаах» toast.
+  late final AnimationController _toast = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+  );
+  int? _lastRemoved;
+  Timer? _toastTimer;
+
+  final _tileKeys = [for (final _ in _savedProfiles) GlobalKey()];
+
+  // Built once: the screen rebuilds every frame while things animate.
   final _reveals = <double, CurvedAnimation>{};
 
+  @override
   @override
   void dispose() {
     for (final r in _reveals.values) {
       r.dispose();
     }
+    for (final c in _shown) {
+      c.dispose();
+    }
+    _toastTimer?.cancel();
     _intro.dispose();
     _version.dispose();
     _users.dispose();
+    _manage.dispose();
+    _jiggle.dispose();
+    _toast.dispose();
     super.dispose();
   }
+
+  bool get _still => MediaQuery.disableAnimationsOf(context);
+
+  bool _included(int i) => i < 2 || _threeUsers;
+
+  int get _visibleCount => [
+    for (var i = 0; i < _savedProfiles.length; i++)
+      if (_included(i) && !_removed.contains(i)) i,
+  ].length;
 
   void _setLight(bool light) {
     if ((light && _version.value == 1) || (!light && _version.value == 0)) {
@@ -122,10 +178,105 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     light ? _version.forward() : _version.reverse();
   }
 
+  /// Prototype reset: choose 2 or 3 saved users (restores removed ones).
   void _setThree(bool three) {
-    if ((three && _users.value == 1) || (!three && _users.value == 0)) return;
     HapticFeedback.selectionClick();
+    _threeUsers = three;
     three ? _users.forward() : _users.reverse();
+    _removed.clear();
+    _hideToast();
+    _setManaging(false);
+    for (var i = 0; i < _shown.length; i++) {
+      _shown[i].animateTo(_included(i) ? 1 : 0, curve: Curves.easeInOutCubic);
+    }
+  }
+
+  void _setManaging(bool on) {
+    if (_managing == on) return;
+    setState(() => _managing = on);
+    if (on) {
+      HapticFeedback.mediumImpact();
+      _manage.forward();
+      if (!_still) _jiggle.repeat();
+    } else {
+      _manage.reverse();
+      _jiggle.stop();
+    }
+  }
+
+  Future<void> _confirmRemove(int i) async {
+    HapticFeedback.selectionClick();
+    final t = Curves.easeInOut.transform(_version.value);
+    final remove = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (_) => _RemoveSheet(
+        profile: _savedProfiles[i],
+        look: _Look.lerp(_Look.dark, _Look.light, t),
+        appearance: t,
+      ),
+    );
+    if (remove == true && mounted) _remove(i);
+  }
+
+  void _remove(int i) {
+    HapticFeedback.heavyImpact();
+    _removed.add(i);
+    _shown[i].animateTo(0, curve: Curves.easeInOutCubic);
+    _lastRemoved = i;
+    _toast.forward(from: 0);
+    _toastTimer?.cancel();
+    _toastTimer = Timer(const Duration(seconds: 4), _hideToast);
+    if (_visibleCount == 0) _setManaging(false);
+    setState(() {});
+  }
+
+  void _undo() {
+    final i = _lastRemoved;
+    if (i == null) return;
+    HapticFeedback.selectionClick();
+    _removed.remove(i);
+    _shown[i].animateTo(1, curve: Curves.easeInOutCubic);
+    _hideToast();
+    setState(() {});
+  }
+
+  void _hideToast() {
+    _toastTimer?.cancel();
+    _toast.reverse();
+  }
+
+  Future<void> _openMenu(int i, _Look look, double t) async {
+    final box = _tileKeys[i].currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    HapticFeedback.mediumImpact();
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+    final p = _savedProfiles[i];
+    final action = await Navigator.of(context).push<_MenuAction>(
+      PageRouteBuilder(
+        opaque: false,
+        barrierDismissible: true,
+        transitionDuration: const Duration(milliseconds: 240),
+        reverseTransitionDuration: const Duration(milliseconds: 180),
+        pageBuilder: (_, animation, _) => _ProfileMenu(
+          animation: animation,
+          rect: rect,
+          appearance: t,
+          tile: _ProfileTile(
+            look: look,
+            name: p.name,
+            role: p.role,
+            avatar: _avatarFor(p, look),
+            onTap: () {},
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == _MenuAction.remove) _confirmRemove(i);
+    if (action == _MenuAction.login) _select(p.name);
   }
 
   Widget _reveal(double start, Widget child) {
@@ -157,14 +308,152 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     debugPrint('profile: $who');
   }
 
+  Widget _profilesRow(_Look look, double t) {
+    final m = _manage.value;
+    final vs = [for (final c in _shown) c.value];
+    final total = vs.fold(0.0, (a, b) => a + b);
+    final gap = 24 - 8 * (total - 2).clamp(0.0, 1.0);
+    final red = Color.lerp(_redDark, _redLight, t)!;
+    final children = <Widget>[];
+    var before = 0.0;
+    for (var i = 0; i < _savedProfiles.length; i++) {
+      final v = vs[i];
+      if (v <= 0) continue;
+      final p = _savedProfiles[i];
+      final wiggle = _managing && !_still
+          ? math.sin((_jiggle.value + i * 0.37) * 2 * math.pi) * 0.026 * m
+          : 0.0;
+      Widget tile = _ProfileTile(
+        key: _tileKeys[i],
+        look: look,
+        name: p.name,
+        role: p.role,
+        avatar: Transform.rotate(
+          angle: wiggle,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _avatarFor(p, look),
+              if (m > 0)
+                Positioned(
+                  left: -1,
+                  top: -1,
+                  child: _RemoveBadge(progress: m, color: red),
+                ),
+            ],
+          ),
+        ),
+        onTap: _managing ? () => _confirmRemove(i) : () => _select(p.name),
+        onLongPress: _managing ? null : () => _openMenu(i, look, t),
+      );
+      tile = Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: gap * before.clamp(0.0, 1.0)),
+          tile,
+        ],
+      );
+      if (v < 1) {
+        tile = ClipRect(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            widthFactor: v,
+            child: Opacity(
+              opacity: v,
+              child: Transform.scale(scale: 0.85 + 0.15 * v, child: tile),
+            ),
+          ),
+        );
+      }
+      children.add(_reveal(0.2 + 0.08 * i, tile));
+      before += v;
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
+  }
+
+  Widget _actions(_Look look, double t) {
+    final Widget child;
+    if (_managing) {
+      child = Column(
+        key: const ValueKey('manage'),
+        children: [
+          Text(
+            'Энэ төхөөрөмжөөс хасах хэрэглэгчээ сонгоно уу',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              height: 20 / 13,
+              fontWeight: FontWeight.w500,
+              color: look.muted,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _Pressable(
+            onTap: () => _setManaging(false),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+              decoration: BoxDecoration(
+                color: Color.lerp(Colors.white, _brand, t),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Болсон',
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 20 / 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color.lerp(Colors.black, Colors.white, t),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      child = Column(
+        key: const ValueKey('login'),
+        children: [
+          _TextLink(
+            look,
+            'Өөр хэрэглэгчээр нэвтрэх',
+            onTap: () => _select('other'),
+          ),
+          if (_visibleCount > 0)
+            _TextLink(
+              look,
+              'Хэрэглэгч удирдах',
+              onTap: () => _setManaging(true),
+            ),
+        ],
+      );
+    }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_version, _users]),
+      animation: Listenable.merge([
+        _version,
+        _users,
+        _manage,
+        _jiggle,
+        _toast,
+        ..._shown,
+      ]),
       builder: (context, _) {
         final t = Curves.easeInOut.transform(_version.value);
         final u = Curves.easeInOutCubic.transform(_users.value);
         final look = _Look.lerp(_Look.dark, _Look.light, t);
+        final bottomInset = MediaQuery.paddingOf(context).bottom;
+        final toastA = Curves.easeOutCubic.transform(_toast.value);
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: t < 0.5
               ? SystemUiOverlayStyle.light
@@ -195,81 +484,30 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
                       const SizedBox(height: 36),
                       _reveal(0.05, _TdbLogo(look.logo)),
                       const SizedBox(height: 100),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _reveal(
-                            0.2,
-                            _ProfileTile(
-                              look: look,
-                              name: 'Алтангэрэл',
-                              role: 'Иргэн',
-                              avatar: _PhotoAvatar(
-                                'assets/images/avatar.jpg',
-                                look.photoBorder,
-                              ),
-                              onTap: () => _select('Алтангэрэл'),
-                            ),
-                          ),
-                          SizedBox(width: 24 - 8 * u),
-                          _reveal(
-                            0.28,
-                            _ProfileTile(
-                              look: look,
-                              name: 'Эрдэнэ Трейд',
-                              role: 'Байгууллага',
-                              avatar: const _InitialsAvatar(
-                                'ЭТ',
-                                background: _brand,
-                                foreground: Colors.white,
-                              ),
-                              onTap: () => _select('Эрдэнэ Трейд'),
-                            ),
-                          ),
-                          // Third user grows in, so the row re-centres smoothly.
-                          if (u > 0)
-                            ClipRect(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                widthFactor: u,
-                                child: Opacity(
-                                  opacity: u,
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const SizedBox(width: 16),
-                                      _ProfileTile(
-                                        look: look,
-                                        name: 'Номин Групп',
-                                        role: 'Байгууллага',
-                                        avatar: _InitialsAvatar(
-                                          'НГ',
-                                          background: look.softAvatar,
-                                          foreground: look.softAvatarText,
-                                        ),
-                                        onTap: () => _select('Номин Групп'),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                      _profilesRow(look, t),
                       const SizedBox(height: 28),
-                      _reveal(
-                        0.4,
-                        _OtherUserLink(look, onTap: () => _select('other')),
-                      ),
+                      _reveal(0.4, _actions(look, t)),
                     ],
                   ),
                 ),
+                if (_toast.value > 0 && _lastRemoved != null)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: bottomInset + 16 + 50 + 12 - 12 * (1 - toastA),
+                    child: Opacity(
+                      opacity: toastA,
+                      child: _RemovedToast(
+                        name: _savedProfiles[_lastRemoved!].name,
+                        appearance: t,
+                        onUndo: _undo,
+                      ),
+                    ),
+                  ),
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: MediaQuery.paddingOf(context).bottom + 16,
+                  bottom: bottomInset + 16,
                   child: Center(
                     child: _reveal(
                       0.5,
@@ -382,11 +620,13 @@ class _TdbLogo extends StatelessWidget {
 
 class _ProfileTile extends StatelessWidget {
   const _ProfileTile({
+    super.key,
     required this.look,
     required this.name,
     required this.role,
     required this.avatar,
     required this.onTap,
+    this.onLongPress,
   });
 
   final _Look look;
@@ -394,11 +634,13 @@ class _ProfileTile extends StatelessWidget {
   final String role;
   final Widget avatar;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return _Pressable(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Column(
         children: [
           avatar,
@@ -429,16 +671,17 @@ class _ProfileTile extends StatelessWidget {
 }
 
 class _PhotoAvatar extends StatelessWidget {
-  const _PhotoAvatar(this.asset, this.border);
+  const _PhotoAvatar(this.asset, this.border, {this.size = 78});
 
   final String asset;
   final Color border;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 78,
-      height: 78,
+      width: size,
+      height: size,
       foregroundDecoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: border),
@@ -453,23 +696,25 @@ class _InitialsAvatar extends StatelessWidget {
     this.initials, {
     required this.background,
     required this.foreground,
+    this.size = 78,
   });
 
   final String initials;
   final Color background;
   final Color foreground;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 78,
-      height: 78,
+      width: size,
+      height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: background, shape: BoxShape.circle),
       child: Text(
         initials,
         style: TextStyle(
-          fontSize: 19,
+          fontSize: size * 19 / 78,
           fontWeight: FontWeight.w600,
           color: foreground,
         ),
@@ -478,12 +723,13 @@ class _InitialsAvatar extends StatelessWidget {
   }
 }
 
-/// «Өөр хэрэглэгчээр нэвтрэх»: text link that replaces the «Нэмэх» button
-/// (Figma reference 1943:1086 — SemiBold 13/20, centred in a 36pt-tall box).
-class _OtherUserLink extends StatelessWidget {
-  const _OtherUserLink(this.look, {required this.onTap});
+/// Text link in the style of Figma 1943:1086 («Өөр хэрэглэгчээр нэвтрэх»):
+/// SemiBold 13/20, muted, centred in a 36pt-tall box.
+class _TextLink extends StatelessWidget {
+  const _TextLink(this.look, this.label, {required this.onTap});
 
   final _Look look;
+  final String label;
   final VoidCallback onTap;
 
   @override
@@ -495,7 +741,7 @@ class _OtherUserLink extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         alignment: Alignment.center,
         child: Text(
-          'Өөр хэрэглэгчээр нэвтрэх',
+          label,
           style: TextStyle(
             fontSize: 13,
             height: 20 / 13,
@@ -651,10 +897,15 @@ class _Icon extends StatelessWidget {
 
 /// Scales down slightly while pressed.
 class _Pressable extends StatefulWidget {
-  const _Pressable({required this.child, required this.onTap});
+  const _Pressable({
+    required this.child,
+    required this.onTap,
+    this.onLongPress,
+  });
 
   final Widget child;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   State<_Pressable> createState() => _PressableState();
@@ -675,6 +926,12 @@ class _PressableState extends State<_Pressable> {
       onTapUp: (_) => _set(false),
       onTapCancel: () => _set(false),
       onTap: widget.onTap,
+      onLongPress: widget.onLongPress == null
+          ? null
+          : () {
+              _set(false);
+              widget.onLongPress!();
+            },
       child: AnimatedScale(
         scale: _down ? 0.94 : 1,
         duration: const Duration(milliseconds: 140),
