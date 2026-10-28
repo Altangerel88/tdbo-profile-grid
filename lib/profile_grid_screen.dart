@@ -18,6 +18,8 @@ class _Look {
     required this.logo,
     required this.photoBorder,
     required this.plus,
+    required this.softAvatar,
+    required this.softAvatarText,
   });
 
   final Color page;
@@ -28,6 +30,10 @@ class _Look {
   final Color photoBorder;
   final Color plus;
 
+  /// Secondary initials avatar (e.g. «НГ»), as in Figma 1936:453 / 1936:627.
+  final Color softAvatar;
+  final Color softAvatarText;
+
   // Light-theme greys mapped to white at reduced opacity so they read on black.
   static const dark = _Look(
     page: Colors.black,
@@ -37,6 +43,8 @@ class _Look {
     logo: Colors.white,
     photoBorder: Color(0x29FFFFFF),
     plus: Color(0xD9FFFFFF),
+    softAvatar: Color(0x1AFFFFFF),
+    softAvatarText: Colors.white,
   );
 
   // Figma gs 1922:246 as designed.
@@ -48,6 +56,8 @@ class _Look {
     logo: _brand,
     photoBorder: Color(0xFFE3E3E3),
     plus: Color(0xFF75808A),
+    softAvatar: Color(0x1A0054A6),
+    softAvatarText: _brand,
   );
 
   static _Look lerp(_Look a, _Look b, double t) => _Look(
@@ -58,6 +68,8 @@ class _Look {
     logo: Color.lerp(a.logo, b.logo, t)!,
     photoBorder: Color.lerp(a.photoBorder, b.photoBorder, t)!,
     plus: Color.lerp(a.plus, b.plus, t)!,
+    softAvatar: Color.lerp(a.softAvatar, b.softAvatar, t)!,
+    softAvatarText: Color.lerp(a.softAvatarText, b.softAvatarText, t)!,
   );
 }
 
@@ -83,6 +95,12 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     duration: const Duration(milliseconds: 650),
   );
 
+  // 0 = two users, 1 = three users.
+  late final AnimationController _users = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 450),
+  );
+
   // Built once: the screen rebuilds every frame while the version crossfades.
   final _reveals = <double, CurvedAnimation>{};
 
@@ -93,6 +111,7 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     }
     _intro.dispose();
     _version.dispose();
+    _users.dispose();
     super.dispose();
   }
 
@@ -102,6 +121,12 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     }
     HapticFeedback.selectionClick();
     light ? _version.forward() : _version.reverse();
+  }
+
+  void _setThree(bool three) {
+    if ((three && _users.value == 1) || (!three && _users.value == 0)) return;
+    HapticFeedback.selectionClick();
+    three ? _users.forward() : _users.reverse();
   }
 
   Widget _reveal(double start, Widget child) {
@@ -136,9 +161,10 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _version,
+      animation: Listenable.merge([_version, _users]),
       builder: (context, _) {
         final t = Curves.easeInOut.transform(_version.value);
+        final u = Curves.easeInOutCubic.transform(_users.value);
         final look = _Look.lerp(_Look.dark, _Look.light, t);
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: t < 0.5
@@ -187,17 +213,50 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
                               onTap: () => _select('Алтангэрэл'),
                             ),
                           ),
-                          const SizedBox(width: 24),
+                          SizedBox(width: 24 - 8 * u),
                           _reveal(
                             0.28,
                             _ProfileTile(
                               look: look,
                               name: 'Эрдэнэ Трейд',
                               role: 'Байгууллага',
-                              avatar: const _InitialsAvatar('ЭТ'),
+                              avatar: const _InitialsAvatar(
+                                'ЭТ',
+                                background: _brand,
+                                foreground: Colors.white,
+                              ),
                               onTap: () => _select('Эрдэнэ Трейд'),
                             ),
                           ),
+                          // Third user grows in, so the row re-centres smoothly.
+                          if (u > 0)
+                            ClipRect(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: u,
+                                child: Opacity(
+                                  opacity: u,
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(width: 16),
+                                      _ProfileTile(
+                                        look: look,
+                                        name: 'Номин Групп',
+                                        role: 'Байгууллага',
+                                        avatar: _InitialsAvatar(
+                                          'НГ',
+                                          background: look.softAvatar,
+                                          foreground: look.softAvatarText,
+                                        ),
+                                        onTap: () => _select('Номин Групп'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 28),
@@ -219,7 +278,32 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
                   child: Center(
                     child: _reveal(
                       0.5,
-                      _VersionSwitch(t: t, onChanged: _setLight),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _Segmented(
+                            appearance: t,
+                            position: t,
+                            segmentWidth: 96,
+                            segments: const [
+                              ('Dark', Icons.dark_mode_rounded),
+                              ('Light', Icons.light_mode_rounded),
+                            ],
+                            onSelect: (i) => _setLight(i == 1),
+                          ),
+                          const SizedBox(width: 8),
+                          _Segmented(
+                            appearance: t,
+                            position: u,
+                            segmentWidth: 56,
+                            segments: const [
+                              ('2', Icons.person_rounded),
+                              ('3', Icons.group_rounded),
+                            ],
+                            onSelect: (i) => _setThree(i == 1),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -239,12 +323,8 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = TextStyle(
-      fontSize: 14,
-      height: 20 / 14,
-      fontWeight: FontWeight.w700,
-      color: look.muted,
-    );
+    // Help (?) replaces «Тусламж ···»; the flag replaces «English ›» and shows
+    // the language you can switch to (UK flag on these Mongolian screens).
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
@@ -252,21 +332,18 @@ class _TopBar extends StatelessWidget {
         children: [
           _Pressable(
             onTap: () => HapticFeedback.selectionClick(),
-            child: Row(
-              children: [
-                Text('Тусламж', style: style),
-                const SizedBox(width: 4),
-                _Icon('assets/icons/dots_three.svg', 24, 24, look.muted),
-              ],
+            child: Semantics(
+              label: 'Тусламж',
+              button: true,
+              child: _Icon('assets/icons/help.svg', 24, 24, look.muted),
             ),
           ),
           _Pressable(
             onTap: () => HapticFeedback.selectionClick(),
-            child: Row(
-              children: [
-                Text('English', style: style),
-                _Icon('assets/icons/chevron_right.svg', 24, 24, look.muted),
-              ],
+            child: Semantics(
+              label: 'English',
+              button: true,
+              child: const _Flag('assets/flags/gb.svg'),
             ),
           ),
         ],
@@ -377,9 +454,15 @@ class _PhotoAvatar extends StatelessWidget {
 }
 
 class _InitialsAvatar extends StatelessWidget {
-  const _InitialsAvatar(this.initials);
+  const _InitialsAvatar(
+    this.initials, {
+    required this.background,
+    required this.foreground,
+  });
 
   final String initials;
+  final Color background;
+  final Color foreground;
 
   @override
   Widget build(BuildContext context) {
@@ -387,20 +470,20 @@ class _InitialsAvatar extends StatelessWidget {
       width: 104,
       height: 104,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(color: _brand, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
       child: Text(
         initials,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 25,
           fontWeight: FontWeight.w600,
-          color: Colors.white,
+          color: foreground,
         ),
       ),
     );
   }
 }
 
-/// «Нэмэх»: a 64×64, radius-16 Liquid Glass button (Figma 1922:371) with its
+/// «Нэмэх»: a 64pt circular Liquid Glass button (Figma 1931:304) with its
 /// label underneath.
 class _AddTile extends StatelessWidget {
   const _AddTile(this.look, {required this.dark, required this.onTap});
@@ -416,6 +499,7 @@ class _AddTile extends StatelessWidget {
     return Column(
       children: [
         LiquidGlassButton(
+          radius: 32,
           dark: dark,
           onTap: onTap,
           child: _Icon('assets/icons/plus.svg', 24, 24, look.plus),
@@ -435,19 +519,31 @@ class _AddTile extends StatelessWidget {
   }
 }
 
-/// Prototype control: switches between the dark and light versions.
-class _VersionSwitch extends StatelessWidget {
-  const _VersionSwitch({required this.t, required this.onChanged});
+/// Prototype control: a pill of segments with a sliding thumb (Dark/Light,
+/// and 2/3 users). Colours follow [appearance]; the thumb follows [position].
+class _Segmented extends StatelessWidget {
+  const _Segmented({
+    required this.appearance,
+    required this.position,
+    required this.segmentWidth,
+    required this.segments,
+    required this.onSelect,
+  });
 
-  /// 0 = dark selected, 1 = light selected (animated in between).
-  final double t;
-  final ValueChanged<bool> onChanged;
+  /// 0 = dark styling, 1 = light (animated in between).
+  final double appearance;
 
-  static const _segW = 96.0;
+  /// Thumb position: 0 = first segment, 1 = second (animated in between).
+  final double position;
+  final double segmentWidth;
+  final List<(String, IconData)> segments;
+  final ValueChanged<int> onSelect;
+
   static const _segH = 40.0;
 
   @override
   Widget build(BuildContext context) {
+    final t = appearance;
     final track = Color.lerp(const Color(0x1AFFFFFF), Colors.white, t)!;
     final border = Color.lerp(
       const Color(0x24FFFFFF),
@@ -462,14 +558,15 @@ class _VersionSwitch extends StatelessWidget {
       t,
     )!;
 
-    Widget segment(String label, IconData icon, bool light) {
-      final sel = light ? t : 1 - t;
+    Widget segment(int i) {
+      final (label, icon) = segments[i];
+      final sel = i == 1 ? position : 1 - position;
       final color = Color.lerp(unselected, selected, sel)!;
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => onChanged(light),
+        onTap: () => onSelect(i),
         child: SizedBox(
-          width: _segW,
+          width: segmentWidth,
           height: _segH,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -511,9 +608,9 @@ class _VersionSwitch extends StatelessWidget {
       child: Stack(
         children: [
           Positioned(
-            left: _segW * t,
+            left: segmentWidth * position,
             top: 0,
-            width: _segW,
+            width: segmentWidth,
             height: _segH,
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -524,13 +621,30 @@ class _VersionSwitch extends StatelessWidget {
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              segment('Dark', Icons.dark_mode_rounded, false),
-              segment('Light', Icons.light_mode_rounded, true),
-            ],
+            children: [segment(0), segment(1)],
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A 24pt round flag (circle-flags, MIT) with a hairline edge.
+class _Flag extends StatelessWidget {
+  const _Flag(this.asset);
+
+  final String asset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 24,
+      height: 24,
+      foregroundDecoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0x1A000000)),
+      ),
+      child: ClipOval(child: SvgPicture.asset(asset, width: 24, height: 24)),
     );
   }
 }

@@ -22,6 +22,7 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/flags/
 
   shaders:
     - shaders/glass_bg.frag

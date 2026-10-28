@@ -1,0 +1,1 @@
+Flags from circle-flags 2.8.3 (MIT), https://github.com/HatScripts/circle-flags. Circular mask removed; clipped to a circle in code.
