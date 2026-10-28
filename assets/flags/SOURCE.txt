@@ -1,1 +1,5 @@
-Flags from circle-flags 2.8.3 (MIT), https://github.com/HatScripts/circle-flags. Circular mask removed; clipped to a circle in code.
+Language flags supplied by the designer (Archive 5.zip, 2026-10-28):
+  usd.svg = original US flag (image fill via <pattern>, used as-is in Figma)
+  en.svg  = same art restructured for flutter_svg (no <pattern> support): the embedded PNG drawn
+            directly at the pattern's position/scale, clipped to the same rx=4 rect
+  mn.svg  = ic_lang_mn.svg, as-is

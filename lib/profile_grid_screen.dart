@@ -324,7 +324,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Help (?) replaces «Тусламж ···»; the flag replaces «English ›» and shows
-    // the language you can switch to (UK flag on these Mongolian screens).
+    // the language you can switch to (US flag on these Mongolian screens).
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
@@ -343,7 +343,7 @@ class _TopBar extends StatelessWidget {
             child: Semantics(
               label: 'English',
               button: true,
-              child: const _Flag('assets/flags/gb.svg'),
+              child: const _Flag('assets/flags/en.svg'),
             ),
           ),
         ],
@@ -630,7 +630,7 @@ class _Segmented extends StatelessWidget {
   }
 }
 
-/// A 24pt round flag (circle-flags, MIT) with a hairline edge.
+/// Language flag as supplied by the designer (28×22 box, art kept as-is).
 class _Flag extends StatelessWidget {
   const _Flag(this.asset);
 
@@ -638,15 +638,7 @@ class _Flag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      foregroundDecoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0x1A000000)),
-      ),
-      child: ClipOval(child: SvgPicture.asset(asset, width: 24, height: 24)),
-    );
+    return SvgPicture.asset(asset, width: 28, height: 22);
   }
 }
 
