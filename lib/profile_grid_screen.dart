@@ -273,12 +273,17 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     );
   }
 
-  /// «Өөр хэрэглэгчээр нэвтрэх» → username / password login (swipe back).
+  /// «Өөр хэрэглэгчээр нэвтрэх» → username / password login. Its theme
+  /// switch writes back here directly: this route's tickers are paused while
+  /// it is covered, so an animation started now would only run after the pop.
   void _openPasswordLogin(double t) {
     HapticFeedback.selectionClick();
     Navigator.of(context).push(
       CupertinoPageRoute<void>(
-        builder: (_) => _PasswordLoginScreen(appearance: t.roundToDouble()),
+        builder: (_) => _PasswordLoginScreen(
+          initialLight: t > 0.5,
+          onThemeChanged: (light) => _version.value = light ? 1 : 0,
+        ),
       ),
     );
   }
@@ -532,36 +537,57 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar(this.look);
+  const _TopBar(this.look, {this.onBack});
 
   final _Look look;
+
+  /// When set, a back chevron takes the left slot and «?» moves next to the
+  /// flag (pushed screens such as the username/password login).
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
     // Help (?) replaces «Тусламж ···»; the flag replaces «English ›» and shows
     // the language you can switch to (US flag on these Mongolian screens).
+    final help = _Pressable(
+      onTap: () => HapticFeedback.selectionClick(),
+      child: Semantics(
+        label: 'Тусламж',
+        button: true,
+        child: _Icon('assets/icons/help.svg', 24, 24, look.muted),
+      ),
+    );
+    final flag = _Pressable(
+      onTap: () => HapticFeedback.selectionClick(),
+      child: Semantics(
+        label: 'English',
+        button: true,
+        child: const _Flag('assets/flags/en.svg'),
+      ),
+    );
+    final back = onBack;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _Pressable(
-            onTap: () => HapticFeedback.selectionClick(),
-            child: Semantics(
-              label: 'Тусламж',
-              button: true,
-              child: _Icon('assets/icons/help.svg', 24, 24, look.muted),
-            ),
-          ),
-          _Pressable(
-            onTap: () => HapticFeedback.selectionClick(),
-            child: Semantics(
-              label: 'English',
-              button: true,
-              child: const _Flag('assets/flags/en.svg'),
-            ),
-          ),
-        ],
+        children: back == null
+            ? [help, flag]
+            : [
+                _Pressable(
+                  onTap: back,
+                  child: Semantics(
+                    label: 'Буцах',
+                    button: true,
+                    child: _Icon(
+                      'assets/icons/chevron_left.svg',
+                      24,
+                      24,
+                      look.muted,
+                    ),
+                  ),
+                ),
+                Row(children: [help, const SizedBox(width: 16), flag]),
+              ],
       ),
     );
   }

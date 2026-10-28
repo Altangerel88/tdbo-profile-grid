@@ -1,21 +1,43 @@
 part of 'profile_grid_screen.dart';
 
-/// «Өөр хэрэглэгчээр нэвтрэх» → username / password login (Figma gs 1953:1679).
+/// «Өөр хэрэглэгчээр нэвтрэх» → username / password login (Figma gs 1953:1679),
+/// with a back chevron and the Dark/Light switch.
 /// Same top bar, logo and animated background as the profile grid; the
 /// background shares its clock, so it carries on without a jump.
 class _PasswordLoginScreen extends StatefulWidget {
-  const _PasswordLoginScreen({required this.appearance});
+  const _PasswordLoginScreen({
+    required this.initialLight,
+    required this.onThemeChanged,
+  });
 
-  /// 0 = dark, 1 = light (taken from the profile screen when opened).
-  final double appearance;
+  /// The look the profile screen was in when this was opened.
+  final bool initialLight;
+
+  /// Keeps the profile screen's look in step with the switch here.
+  final ValueChanged<bool> onThemeChanged;
 
   @override
   State<_PasswordLoginScreen> createState() => _PasswordLoginScreenState();
 }
 
-class _PasswordLoginScreenState extends State<_PasswordLoginScreen> {
+class _PasswordLoginScreenState extends State<_PasswordLoginScreen>
+    with SingleTickerProviderStateMixin {
   final _user = TextEditingController();
   final _pass = TextEditingController();
+
+  // 0 = dark, 1 = light.
+  late final AnimationController _theme = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 650),
+    value: widget.initialLight ? 1 : 0,
+  );
+
+  void _setLight(bool light) {
+    if ((light && _theme.value == 1) || (!light && _theme.value == 0)) return;
+    HapticFeedback.selectionClick();
+    light ? _theme.forward() : _theme.reverse();
+    widget.onThemeChanged(light);
+  }
 
   @override
   void initState() {
@@ -30,6 +52,7 @@ class _PasswordLoginScreenState extends State<_PasswordLoginScreen> {
   void dispose() {
     _user.dispose();
     _pass.dispose();
+    _theme.dispose();
     super.dispose();
   }
 
@@ -44,8 +67,13 @@ class _PasswordLoginScreenState extends State<_PasswordLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = widget.appearance;
+    return AnimatedBuilder(animation: _theme, builder: _build);
+  }
+
+  Widget _build(BuildContext context, Widget? _) {
+    final t = Curves.easeInOut.transform(_theme.value);
     final look = _Look.lerp(_Look.dark, _Look.light, t);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     final ink = Color.lerp(Colors.white, const Color(0xFF242424), t)!;
     final link = Color.lerp(const Color(0xFF80A9D2), _brand, t)!;
 
@@ -54,12 +82,21 @@ class _PasswordLoginScreenState extends State<_PasswordLoginScreen> {
       child: Scaffold(
         backgroundColor: look.page,
         body: Stack(
+          fit: StackFit.expand,
           children: [
-            Positioned.fill(
-              child: t < 0.5
-                  ? const GlassBackground()
-                  : const GlassBackground.light(),
-            ),
+            if (t < 1)
+              const Positioned.fill(
+                key: ValueKey('bg-dark'),
+                child: GlassBackground(),
+              ),
+            if (t > 0)
+              Positioned.fill(
+                key: const ValueKey('bg-light'),
+                child: Opacity(
+                  opacity: t,
+                  child: const GlassBackground.light(),
+                ),
+              ),
             SafeArea(
               bottom: false,
               child: SingleChildScrollView(
@@ -67,7 +104,10 @@ class _PasswordLoginScreenState extends State<_PasswordLoginScreen> {
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 child: Column(
                   children: [
-                    _TopBar(look),
+                    _TopBar(
+                      look,
+                      onBack: () => Navigator.of(context).maybePop(),
+                    ),
                     const SizedBox(height: 32),
                     _TdbLogo(look.logo),
                     const SizedBox(height: 32),
@@ -167,6 +207,30 @@ class _PasswordLoginScreenState extends State<_PasswordLoginScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.paddingOf(context).bottom + 16,
+              child: IgnorePointer(
+                ignoring: keyboard,
+                child: AnimatedOpacity(
+                  opacity: keyboard ? 0 : 1,
+                  duration: const Duration(milliseconds: 150),
+                  child: Center(
+                    child: _Segmented(
+                      appearance: t,
+                      position: t,
+                      segmentWidth: 96,
+                      segments: const [
+                        ('Dark', Icons.dark_mode_rounded),
+                        ('Light', Icons.light_mode_rounded),
+                      ],
+                      onSelect: (i) => _setLight(i == 1),
+                    ),
+                  ),
                 ),
               ),
             ),
