@@ -1,9 +1,9 @@
 part of 'profile_grid_screen.dart';
 
 // Delete-saved-login flow (Figma gs section 1955:816):
-//   login → «Хэрэглэгч удирдах» → manage mode (− badges) → tap a profile →
+//   press & hold a profile → manage mode (− badges, jiggle) → tap a profile →
 //   confirm sheet «Хасах» → profile leaves, toast with «Буцаах» (undo).
-//   Shortcut: long-press a profile → context menu → «Энэ төхөөрөмжөөс хасах».
+//   «Болсон» or a tap on empty space leaves manage mode.
 
 const _redDark = Color(0xFFFF453A); // iOS system red, dark
 const _redLight = Color(0xFFFF3B30); // iOS system red, light
@@ -186,146 +186,6 @@ class _RemoveSheet extends StatelessWidget {
           button('Болих', cancelBg, title, false),
         ],
       ),
-    );
-  }
-}
-
-enum _MenuAction { login, remove }
-
-/// Long-press menu: dims and blurs the screen, lifts the pressed profile and
-/// shows «Нэвтрэх» / «Энэ төхөөрөмжөөс хасах» under it.
-class _ProfileMenu extends StatelessWidget {
-  const _ProfileMenu({
-    required this.animation,
-    required this.rect,
-    required this.tile,
-    required this.appearance,
-  });
-
-  final Animation<double> animation;
-
-  /// Where the pressed tile sits on screen.
-  final Rect rect;
-  final Widget tile;
-  final double appearance;
-
-  static const _width = 276.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = appearance;
-    final menuBg = Color.lerp(
-      const Color(0xF02C2C2E),
-      const Color(0xF2FFFFFF),
-      t,
-    )!;
-    final label = Color.lerp(Colors.white, const Color(0xFF242424), t)!;
-    final divider = Color.lerp(
-      const Color(0x24FFFFFF),
-      const Color(0x1F242424),
-      t,
-    )!;
-    final red = Color.lerp(_redDark, _redLight, t)!;
-    final size = MediaQuery.sizeOf(context);
-    final left = (rect.center.dx - _width / 2).clamp(
-      16.0,
-      size.width - 16 - _width,
-    );
-
-    Widget item(String text, IconData icon, Color color, _MenuAction action) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => Navigator.of(context).pop(action),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: color,
-                  ),
-                ),
-              ),
-              Icon(icon, size: 20, color: color),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        final a = Curves.easeOutCubic.transform(animation.value);
-        // The route has no Material ancestor; give text its default style.
-        return Material(
-          type: MaterialType.transparency,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(sigmaX: 16 * a, sigmaY: 16 * a),
-                    child: ColoredBox(
-                      color: Colors.black.withValues(alpha: 0.35 * a),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned.fromRect(
-                rect: rect,
-                child: IgnorePointer(
-                  child: Transform.scale(scale: 1 + 0.08 * a, child: tile),
-                ),
-              ),
-              Positioned(
-                left: left,
-                top: rect.bottom + 12,
-                width: _width,
-                child: Opacity(
-                  opacity: a,
-                  child: Transform.scale(
-                    scale: 0.85 + 0.15 * a,
-                    alignment: Alignment.topCenter,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: BackdropFilter(
-                        filter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                        child: ColoredBox(
-                          color: menuBg,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              item(
-                                'Нэвтрэх',
-                                Icons.login_rounded,
-                                label,
-                                _MenuAction.login,
-                              ),
-                              Container(height: 0.5, color: divider),
-                              item(
-                                'Энэ төхөөрөмжөөс хасах',
-                                Icons.delete_outline_rounded,
-                                red,
-                                _MenuAction.remove,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

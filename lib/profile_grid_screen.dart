@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -118,7 +117,7 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
   ];
   final Set<int> _removed = {};
 
-  // Manage mode («Хэрэглэгч удирдах»): badges + a gentle jiggle.
+  // Manage mode (press & hold a profile): badges + a gentle jiggle.
   bool _managing = false;
   late final AnimationController _manage = AnimationController(
     vsync: this,
@@ -248,37 +247,6 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     _toast.reverse();
   }
 
-  Future<void> _openMenu(int i, _Look look, double t) async {
-    final box = _tileKeys[i].currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    HapticFeedback.mediumImpact();
-    final rect = box.localToGlobal(Offset.zero) & box.size;
-    final p = _savedProfiles[i];
-    final action = await Navigator.of(context).push<_MenuAction>(
-      PageRouteBuilder(
-        opaque: false,
-        barrierDismissible: true,
-        transitionDuration: const Duration(milliseconds: 240),
-        reverseTransitionDuration: const Duration(milliseconds: 180),
-        pageBuilder: (_, animation, _) => _ProfileMenu(
-          animation: animation,
-          rect: rect,
-          appearance: t,
-          tile: _ProfileTile(
-            look: look,
-            name: p.name,
-            role: p.role,
-            avatar: _avatarFor(p, look),
-            onTap: () {},
-          ),
-        ),
-      ),
-    );
-    if (!mounted) return;
-    if (action == _MenuAction.remove) _confirmRemove(i);
-    if (action == _MenuAction.login) _select(p.name);
-  }
-
   Widget _reveal(double start, Widget child) {
     final curve = _reveals.putIfAbsent(
       start,
@@ -344,7 +312,7 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
           ),
         ),
         onTap: _managing ? () => _confirmRemove(i) : () => _select(p.name),
-        onLongPress: _managing ? null : () => _openMenu(i, look, t),
+        onLongPress: _managing ? null : () => _setManaging(true),
       );
       tile = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,12 +390,6 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
             'Өөр хэрэглэгчээр нэвтрэх',
             onTap: () => _select('other'),
           ),
-          if (_visibleCount > 0)
-            _TextLink(
-              look,
-              'Хэрэглэгч удирдах',
-              onTap: () => _setManaging(true),
-            ),
         ],
       );
     }
@@ -474,6 +436,14 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
                     child: Opacity(
                       opacity: t,
                       child: const GlassBackground.light(),
+                    ),
+                  ),
+                // In manage mode, a tap on empty space leaves it (like iOS).
+                if (_managing)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _setManaging(false),
                     ),
                   ),
                 SafeArea(
