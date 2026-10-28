@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'glass_background.dart';
-import 'liquid_glass_button.dart';
 
 const _brand = Color(0xFF0054A6);
 
@@ -262,11 +261,7 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
                       const SizedBox(height: 28),
                       _reveal(
                         0.4,
-                        _AddTile(
-                          look,
-                          dark: 1 - t,
-                          onTap: () => _select('add'),
-                        ),
+                        _OtherUserLink(look, onTap: () => _select('other')),
                       ),
                     ],
                   ),
@@ -483,31 +478,24 @@ class _InitialsAvatar extends StatelessWidget {
   }
 }
 
-/// «Нэмэх»: a 52pt circular Liquid Glass button (Figma 1931:304) with its
-/// label underneath.
-class _AddTile extends StatelessWidget {
-  const _AddTile(this.look, {required this.dark, required this.onTap});
+/// «Өөр хэрэглэгчээр нэвтрэх»: text link that replaces the «Нэмэх» button
+/// (Figma reference 1943:1086 — SemiBold 13/20, centred in a 36pt-tall box).
+class _OtherUserLink extends StatelessWidget {
+  const _OtherUserLink(this.look, {required this.onTap});
 
   final _Look look;
-
-  /// 1 = dark version, 0 = light (animates with the version switch).
-  final double dark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        LiquidGlassButton(
-          size: 52,
-          radius: 26,
-          dark: dark,
-          onTap: onTap,
-          child: _Icon('assets/icons/plus.svg', 20, 20, look.plus),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Нэмэх',
+    return _Pressable(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        alignment: Alignment.center,
+        child: Text(
+          'Өөр хэрэглэгчээр нэвтрэх',
           style: TextStyle(
             fontSize: 13,
             height: 20 / 13,
@@ -515,7 +503,7 @@ class _AddTile extends StatelessWidget {
             color: look.muted,
           ),
         ),
-      ],
+      ),
     );
   }
 }
