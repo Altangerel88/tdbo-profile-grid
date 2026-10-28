@@ -442,11 +442,11 @@ class _PhotoAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 104,
-      height: 104,
+      width: 78,
+      height: 78,
       foregroundDecoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: border, width: 1.04),
+        border: Border.all(color: border),
       ),
       child: ClipOval(child: Image.asset(asset, fit: BoxFit.cover)),
     );
@@ -467,14 +467,14 @@ class _InitialsAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 104,
-      height: 104,
+      width: 78,
+      height: 78,
       alignment: Alignment.center,
       decoration: BoxDecoration(color: background, shape: BoxShape.circle),
       child: Text(
         initials,
         style: TextStyle(
-          fontSize: 25,
+          fontSize: 19,
           fontWeight: FontWeight.w600,
           color: foreground,
         ),
@@ -483,7 +483,7 @@ class _InitialsAvatar extends StatelessWidget {
   }
 }
 
-/// «Нэмэх»: a 64pt circular Liquid Glass button (Figma 1931:304) with its
+/// «Нэмэх»: a 52pt circular Liquid Glass button (Figma 1931:304) with its
 /// label underneath.
 class _AddTile extends StatelessWidget {
   const _AddTile(this.look, {required this.dark, required this.onTap});
@@ -499,10 +499,11 @@ class _AddTile extends StatelessWidget {
     return Column(
       children: [
         LiquidGlassButton(
-          radius: 32,
+          size: 52,
+          radius: 26,
           dark: dark,
           onTap: onTap,
-          child: _Icon('assets/icons/plus.svg', 24, 24, look.plus),
+          child: _Icon('assets/icons/plus.svg', 20, 20, look.plus),
         ),
         const SizedBox(height: 8),
         Text(
