@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,10 @@ final Map<String, Future<ui.FragmentProgram>> _programs = {};
 
 Future<ui.FragmentProgram> _load(String asset) =>
     _programs.putIfAbsent(asset, () => ui.FragmentProgram.fromAsset(asset));
+
+/// One clock for every background and for anything that follows its light,
+/// so a background re-created by a version switch carries on in step.
+final Stopwatch _clock = Stopwatch()..start();
 
 /// Full-screen animated background: a soft light drifting behind tilted
 /// glass slabs, on black (`shaders/glass_bg.frag`) or on the light #F7F7F7
@@ -27,6 +32,23 @@ class GlassBackground extends StatefulWidget {
 
   /// Painted until the shader has loaded.
   final Color fallback;
+
+  // Start mid-loop so the first frame already has the light near the glass.
+  static const double _startAt = 4.0;
+
+  /// Shared animation time, in seconds.
+  static double get time => _startAt + _clock.elapsedMicroseconds / 1e6;
+
+  /// Where the drifting light is at time [t] on a background of [screen]
+  /// size, in logical px. Mirrors `orbPos` in both shaders.
+  static Offset orbAt(double t, Size screen) {
+    final h = screen.height;
+    final a = screen.width / h;
+    return Offset(
+      a * (0.50 + 0.32 * math.sin(t * 0.42)) * h,
+      (0.21 + 0.10 * math.sin(t * 0.31 + 1.7)) * h,
+    );
+  }
 
   /// Loads both shaders and draws each once off-screen, so the first switch
   /// between versions doesn't stall on shader compilation.
@@ -53,12 +75,9 @@ class GlassBackground extends StatefulWidget {
 
 class _GlassBackgroundState extends State<GlassBackground>
     with SingleTickerProviderStateMixin {
-  // Start mid-loop so the first frame already has the light near the glass.
-  static const double _startAt = 4.0;
-
   ui.FragmentShader? _shader;
   late final Ticker _ticker;
-  final ValueNotifier<double> _time = ValueNotifier(_startAt);
+  final ValueNotifier<double> _time = ValueNotifier(GlassBackground.time);
 
   @override
   void initState() {
@@ -66,9 +85,7 @@ class _GlassBackgroundState extends State<GlassBackground>
     _load(widget.shader).then((program) {
       if (mounted) setState(() => _shader = program.fragmentShader());
     });
-    _ticker = createTicker((elapsed) {
-      _time.value = _startAt + elapsed.inMicroseconds / 1e6;
-    });
+    _ticker = createTicker((_) => _time.value = GlassBackground.time);
   }
 
   @override

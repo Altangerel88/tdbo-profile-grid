@@ -26,6 +26,7 @@ flutter:
   shaders:
     - shaders/glass_bg.frag
     - shaders/glass_bg_light.frag
+    - shaders/liquid_glass.frag
 
   fonts:
     - family: Manrope

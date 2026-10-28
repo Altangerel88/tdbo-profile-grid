@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'glass_background.dart';
+import 'liquid_glass_button.dart';
 import 'profile_grid_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   GlassBackground.precache();
+  LiquidGlassShader.load();
   runApp(const App());
 }
 

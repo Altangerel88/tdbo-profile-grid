@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'glass_background.dart';
+import 'liquid_glass_button.dart';
 
 const _brand = Color(0xFF0054A6);
 
@@ -16,8 +17,6 @@ class _Look {
     required this.sub,
     required this.logo,
     required this.photoBorder,
-    required this.tile,
-    required this.tileBorder,
     required this.plus,
   });
 
@@ -27,8 +26,6 @@ class _Look {
   final Color sub;
   final Color logo;
   final Color photoBorder;
-  final Color tile;
-  final Color tileBorder;
   final Color plus;
 
   // Light-theme greys mapped to white at reduced opacity so they read on black.
@@ -39,8 +36,6 @@ class _Look {
     sub: Color(0x8CFFFFFF),
     logo: Colors.white,
     photoBorder: Color(0x29FFFFFF),
-    tile: Color(0x14FFFFFF),
-    tileBorder: Color(0x1FFFFFFF),
     plus: Color(0xD9FFFFFF),
   );
 
@@ -52,8 +47,6 @@ class _Look {
     sub: Color(0xFF75808A),
     logo: _brand,
     photoBorder: Color(0xFFE3E3E3),
-    tile: Colors.white,
-    tileBorder: Color(0x00FFFFFF),
     plus: Color(0xFF75808A),
   );
 
@@ -64,8 +57,6 @@ class _Look {
     sub: Color.lerp(a.sub, b.sub, t)!,
     logo: Color.lerp(a.logo, b.logo, t)!,
     photoBorder: Color.lerp(a.photoBorder, b.photoBorder, t)!,
-    tile: Color.lerp(a.tile, b.tile, t)!,
-    tileBorder: Color.lerp(a.tileBorder, b.tileBorder, t)!,
     plus: Color.lerp(a.plus, b.plus, t)!,
   );
 }
@@ -210,7 +201,14 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
                         ],
                       ),
                       const SizedBox(height: 28),
-                      _reveal(0.4, _AddTile(look, onTap: () => _select('add'))),
+                      _reveal(
+                        0.4,
+                        _AddTile(
+                          look,
+                          dark: 1 - t,
+                          onTap: () => _select('add'),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -402,41 +400,37 @@ class _InitialsAvatar extends StatelessWidget {
   }
 }
 
+/// «Нэмэх»: a 64×64, radius-16 Liquid Glass button (Figma 1922:371) with its
+/// label underneath.
 class _AddTile extends StatelessWidget {
-  const _AddTile(this.look, {required this.onTap});
+  const _AddTile(this.look, {required this.dark, required this.onTap});
 
   final _Look look;
+
+  /// 1 = dark version, 0 = light (animates with the version switch).
+  final double dark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return _Pressable(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: look.tile,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: look.tileBorder),
-            ),
-            child: _Icon('assets/icons/plus.svg', 24, 24, look.plus),
+    return Column(
+      children: [
+        LiquidGlassButton(
+          dark: dark,
+          onTap: onTap,
+          child: _Icon('assets/icons/plus.svg', 24, 24, look.plus),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Нэмэх',
+          style: TextStyle(
+            fontSize: 13,
+            height: 20 / 13,
+            fontWeight: FontWeight.w600,
+            color: look.muted,
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Нэмэх',
-            style: TextStyle(
-              fontSize: 13,
-              height: 20 / 13,
-              fontWeight: FontWeight.w600,
-              color: look.muted,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
