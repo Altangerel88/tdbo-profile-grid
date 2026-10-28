@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'glass_background.dart';
 
+part 'password_login.dart';
 part 'remove_login_flow.dart';
 
 const _brand = Color(0xFF0054A6);
@@ -271,6 +273,16 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
     );
   }
 
+  /// «Өөр хэрэглэгчээр нэвтрэх» → username / password login (swipe back).
+  void _openPasswordLogin(double t) {
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        builder: (_) => _PasswordLoginScreen(appearance: t.roundToDouble()),
+      ),
+    );
+  }
+
   void _select(String who) {
     HapticFeedback.selectionClick();
     debugPrint('profile: $who');
@@ -388,7 +400,7 @@ class _ProfileGridScreenState extends State<ProfileGridScreen>
           _TextLink(
             look,
             'Өөр хэрэглэгчээр нэвтрэх',
-            onTap: () => _select('other'),
+            onTap: () => _openPasswordLogin(t),
           ),
         ],
       );
